@@ -1,0 +1,156 @@
+<style>body,html{margin:0;padding:0; background-color: #fafafa}</style>
+<div style="font-family:monospace; position: relative; top: 40px; left: 40px; display:inline-block;">
+  <div style="font-size:39px; color:#2a3850;">Bike traffic in Gdańsk</div>
+  <div style="font-size:19px; color:#8090a8">All stations with available monthly 2025 data (20 of 33).</div>
+</div>
+<div id="rp-chart" style="display:flex;justify-content:center;margin-top:-120px;"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script>
+(function(){
+const STATIONS=[
+  {name:"Al. Zwycięstwa",           values:[32727,29565,72202,98030,124810,146322,162050,170944,153086,98357,66757,45733],total:1200583},
+  {name:"Pas Nadmorski",            values:[22288,20139,63330,87456,117406,147941,195408,202595,137672,61555,44162,28327],total:1128279},
+  {name:"3 Maja / Hucisko",         values:[30117,26952,67802,85345,91769,107966,121525,140158,111993,75393,63152,49417],total:971589},
+  {name:"Al. Grunwaldzka (Wrzeszcz)",   values:[45963,26407,53814,69451,82754,90812,100754,100079,95659,72889,51197,38182],total:827961},
+  {name:"Al. Grunwaldzka (UG)",     values:[22007,24308,50066,66720,78080,87457,97701,94698,92833,68088,46866,34850],total:763674},
+  {name:"Kartuska",                 values:[22386,24308,45210,57832,70966,78670,88021,88165,81192,51684,37344,27574],total:673352},
+  {name:"Al. Hallera",              values:[15880,14411,33169,45815,62826,79632,89694,93623,74606,42204,28092,19179],total:599131},
+  {name:"Błędnik",                  values:[28611,26407,33580,43693,56471,68737,74723,82949,67338,42739,31827,22789],total:579864},
+  {name:"Chłopska",                 values:[13377,12083,38382,48183,57746,66607,73315,71143,67485,49058,36715,29461],total:563555},
+  {name:"Al. Rzeczypospolitej",     values:[16944,16152,34175,42464,52102,59992,68206,67754,62785,51684,31402,25663],total:529323},
+  {name:"Nowa Warszawska",          values:[7443,7446,20673,28831,35853,36605,37408,37697,42128,26851,18426,13749],total:313110},
+  {name:"Jaśkowa Dolina",           values:[7402,7829,19630,25527,30605,34179,37211,36471,38733,27511,19113,14422],total:298633},
+  {name:"Nowolipie",                values:[9504,8883,17630,23810,29597,32395,36093,35618,36781,24716,17260,12654],total:284941},
+  {name:"Adamowicza",               values:[6793,6261,17031,22717,28923,31079,32278,31696,33609,22543,15940,10954],total:259824},
+  {name:"Łostowicka",               values:[7402,7829,18677,24375,27206,28965,31528,31981,28556,19962,10951,7464],total:244896},
+  {name:"Kliniczna",                values:[7960,7323,14057,18954,23934,29844,32529,34295,31774,20241,13870,9563],total:244344},
+  {name:"Kołobrzeska",              values:[17161,16152,14484,19107,23037,25659,28929,27420,25347,16323,9179,6458],total:229256},
+  {name:"Karczemki",                values:[4305,4116,12591,17277,25592,24754,23903,23744,26346,15872,10076,6943],total:195519},
+  {name:"Wita Stwosza",             values:[5390,4643,11163,12810,15750,18370,17935,17351,17512,15569,10975,7995],total:155463},
+  {name:"Elbląska",                 values:[2821,2659,6266,8106,11619,15273,16429,17239,13208,6473,4902,3876],total:108871},
+];
+
+const dark=window.matchMedia('(prefers-color-scheme: light)').matches;
+const BG    =dark?'#0a0c18':'#fafafa';
+const FRONT =dark?'#dde8ff':'#151520';
+const BACK  =FRONT;
+const FADED =dark?'#445577':'#8899aa';
+const GRID  =dark?'#141828':'#e4e2da';
+const TITLE =dark?'#8aa4c0':'#2a3850';
+const SUB   =dark?'#334560':'#8090a8';
+const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+const N=STATIONS.length;
+const MS=48,ZX=16,ZY=36,YH=180,LM=82,BM=80,TM=0,RL=200;
+const W=LM+(N-1)*ZX+11*MS+RL;
+const H=TM+YH+(N-1)*ZY+BM;
+const GMAX=d3.max(STATIONS,d=>d3.max(d.values));
+const ys=v=>v/GMAX*YH;
+const bx=si=>LM+si*ZX;
+const by=si=>H-BM-si*ZY;
+const mx=(si,mi)=>bx(si)+mi*MS;
+const vy=(si,mi)=>by(si)-ys(STATIONS[si].values[mi]);
+const strokeC=si=>FRONT;
+const labelAlpha=si=>1;
+
+const container=document.getElementById('rp-chart');
+const svg=d3.select(container).append('svg').attr('width',W).attr('height',H).style('display','block');
+
+svg.append('rect').attr('width',W).attr('height',H).attr('fill',BG);
+
+const defs=svg.append('defs');
+const grad=defs.append('linearGradient')
+  .attr('id','ridgeGrad')
+  .attr('gradientUnits','objectBoundingBox')
+  .attr('x1',0).attr('y1',0)
+  .attr('x2',0).attr('y2',1);
+grad.append('stop').attr('offset','0%').attr('stop-color','#1F8CB4').attr('stop-opacity',0.8);
+grad.append('stop').attr('offset','100%').attr('stop-color','#1F8CB4').attr('stop-opacity',0);
+
+svg.append('line').attr('x1',bx(0)).attr('y1',by(0)).attr('x2',bx(N-1)).attr('y2',by(N-1))
+  .attr('stroke',FADED).attr('stroke-width',0.4).attr('opacity',0.5);
+svg.append('line').attr('x1',bx(0)+11*MS).attr('y1',by(0)).attr('x2',bx(N-1)+11*MS).attr('y2',by(N-1))
+  .attr('stroke',FADED).attr('stroke-width',0.4).attr('opacity',0.5);
+
+const TIP_H=54;
+const tipG=svg.append('g').style('display','none').style('pointer-events','none');
+const tipBg=tipG.append('rect').attr('rx',2).attr('fill','#000000').attr('fill-opacity',0.75);
+const tipN=tipG.append('text').attr('x',8).attr('y',16).attr('font-family','monospace')
+  .attr('font-size','14px').attr('fill','#ffffff');
+const tipA=tipG.append('text').attr('x',8).attr('y',30).attr('font-family','monospace')
+  .attr('font-size','14px').attr('fill','#ffffff');
+const tipP=tipG.append('text').attr('x',8).attr('y',43).attr('font-family','monospace')
+  .attr('font-size','14px').attr('fill','#ffffff');
+
+function makeLabelHandlers(si){
+  function over(){
+    rgs.forEach(r=>r.g.attr('opacity',r.si===si?1:0.12));
+    tipG.raise();
+    const s=STATIONS[si];
+    const peakMi=s.values.indexOf(Math.max(...s.values));
+    tipN.text(s.name);
+    tipA.text('Annual: '+s.total.toLocaleString()+' cyclists');
+    tipP.text('Peak: '+MONTHS[peakMi]+' — '+Math.round(Math.max(...s.values)/1000)+'k');
+    tipG.style('display',null);
+    const mw=Math.max(
+      tipN.node().getBBox().width,
+      tipA.node().getBBox().width,
+      tipP.node().getBBox().width
+    )+16;
+    tipBg.attr('width',mw).attr('height',TIP_H);
+    const chartMidX=bx(si)+5.5*MS;
+    const tipX=Math.max(0,Math.min(chartMidX-mw/2,W-mw));
+    const tipY=by(si)-ys(Math.max(...s.values))-8-TIP_H;
+    tipG.attr('transform','translate('+tipX+','+tipY+')');
+  }
+  function out(){
+    rgs.forEach(r=>r.g.attr('opacity',1));
+    tipG.style('display','none');
+  }
+  return {over,out};
+}
+
+const rgs=[];
+for(let si=N-1;si>=0;si--){
+  const g=svg.append('g');
+  rgs.push({si,g});
+  const pts=STATIONS[si].values.map((v,mi)=>({x:mx(si,mi),y:vy(si,mi)}));
+  const baseY=by(si);
+  const aGen=d3.area().x(d=>d.x).y0(baseY).y1(d=>d.y).curve(d3.curveMonotoneX);
+  g.append('path').datum(pts).attr('d',aGen).attr('fill','url(#ridgeGrad)');
+
+  g.append('line').attr('x1',mx(si,0)).attr('y1',baseY).attr('x2',mx(si,11.5)).attr('y2',baseY)
+    .attr('stroke',strokeC(si)).attr('stroke-width',0.3).attr('opacity',0.5);
+
+  const labelX=mx(si,11)+40;
+  const {over,out}=makeLabelHandlers(si);
+
+  g.append('rect')
+    .attr('x',labelX)
+    .attr('y',baseY+1-ZY/2)
+    .attr('width',RL-40)
+    .attr('height',ZY)
+    .attr('fill','transparent')
+    .style('cursor','default')
+    .on('mouseover',over)
+    .on('mouseout',out);
+
+  g.append('text')
+    .attr('x',labelX)
+    .attr('y',baseY+1)
+    .attr('dominant-baseline','middle')
+    .attr('fill',strokeC(si)).attr('font-family','monospace').attr('font-size','14px')
+    .attr('opacity',labelAlpha(si)).style('cursor','default')
+    .text(STATIONS[si].name)
+    .on('mouseover',over)
+    .on('mouseout',out);
+}
+
+for(let mi=0;mi<12;mi++){
+  svg.append('text').attr('x',mx(0,mi)).attr('y',by(0)+40)
+    .attr('text-anchor','middle').attr('fill',SUB)
+    .attr('font-family','monospace').attr('font-size','14px').text(MONTHS[mi]);
+}
+tipG.raise();
+})();
+</script>
